@@ -76,11 +76,28 @@ func_render_pdfs <- function(
   #setwd(here::here()); getwd() # the directroy of qmd unchanged
 }
 
-# pilot tests for rendering single pdf####
-
+#################################################
+# 1-2. pilot testing for rendering single pdf####
+#################################################
 func_render_pdfs("BEN", "Benin","en", 2024)
 
 func_render_pdfs("MDG", "Madagascar","fr", 2024)
+
+func_render_pdfs("ERI","Eritrea","en", 2024)
+
+# unprinted countries #due to insufficient projection years, all sorted except for Korea
+func_render_pdfs("AFG","Afghanistan","en", 2024)
+func_render_pdfs("CAF","CAR","en", 2024)
+func_render_pdfs("TCD","Chad","en", 2024)
+func_render_pdfs("PRK","Korea DPR","en", 2024)#failed, due to no projections for PRK for now
+func_render_pdfs("MMR","Myanmar","en", 2024)
+func_render_pdfs("SOM","Somalia","en", 2024)
+
+# FY countries
+func_render_pdfs("PAK","Pakistan","en", 2024)
+func_render_pdfs("ETH","Ethiopia","en", 2024)
+func_render_pdfs("","","en", 2024)
+func_render_pdfs("","","en", 2024)
 
 #########################
 # 2. English for all #### 
@@ -111,7 +128,6 @@ for (i in seq_along(vectors_iso3_en) ) {
   })
 }
 
-# errors in PRK ,MMR, AFG  
 
 #######################################
 # 3. French for selected countries #### 

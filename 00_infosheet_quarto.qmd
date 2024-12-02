@@ -6,7 +6,7 @@ params:
   current_iso3: BEN
   current_country_en: Benin
   #current_country_fr: Bénin # Fr will be fed through rendering in 01_render_parameter.R
-  lang: fr #en / fr
+  lang: fr # en / fr
   current_year: 2024
   projected_year: 2029
   ghed_year: 2021
@@ -57,7 +57,7 @@ dat_mapping <- read_excel("40. Data/IFS_mapping-files/country-mapping.xlsx",
 
 dat_launch <-  read_excel("41. Analytics/vaccine-launches/output_for_infosheet/infosheet_section_vaccine_launch_2024-11-18.xlsx")
 
-dat_cofi_paid_nonFY <- read_excel("41. Analytics/cofi-trends/Infosheet co-financing history/output_table_infosheet/infosheet_payment_history_2024-11-30.xlsx", sheet="Non-FY countries")|>  clean_names() 
+dat_cofi_paid <- read_excel("41. Analytics/cofi-trends/Infosheet co-financing history/output_table_infosheet/infosheet_payment_history_2024-12-02.xlsx", sheet="All countries adjusted")|>  clean_names() 
 
 dat_projection <- read_excel("41. Analytics/cofi-projections/xlsx/cofi-projections_2024-11-08.xlsx")|>  clean_names() 
 
@@ -330,13 +330,13 @@ Source: WHO-UNICEF Joint Report Form on immunisation; Last updated: 25/5/2024
 
 ```{=typst} 
 `r if (params$lang == "en") {
-  paste0("Domestic General Government Health Expenditure (GGHE-D) as % Gross Domestic Product (GDP) in ", 
+  paste0("- Domestic General Government Health Expenditure (GGHE-D) as % Gross Domestic Product (GDP) in ", 
           params$ghed_year, ": ",
           dat_ghed|> filter(code==params$current_iso3, year==params$ghed_year)|> pull(gghed_gdp)|> round(2), "%."
   ) }`
 
 `r if (params$lang == "fr") {
-  paste0("Dépenses Gouvernementales Générales Domestiques en Santé en % Produit Intérieur Brut (PIB) en ", 
+  paste0("- Dépenses Gouvernementales Générales Domestiques en Santé en % Produit Intérieur Brut (PIB) en ", 
           params$ghed_year, ": ",
           dat_ghed|> filter(code==params$current_iso3, year==params$ghed_year)|> pull(gghed_gdp)|> round(2), "%."
   ) }`
@@ -345,12 +345,15 @@ Source: WHO-UNICEF Joint Report Form on immunisation; Last updated: 25/5/2024
 
 ```{=typst} 
 #[ #set text(size: 8pt, fill: gray)
+\
 Source: WHO Global Health Expenditure Database; Last updated: 3/12/2023
 ]
 
-// page break
-```
 
+// vertical spacing as a page break. Set a big number(99pt) to enforce the next heading live in the next page
+
+#v(99pt) 
+```
 
 
 # `r if(params$lang=="en"){"Gavi-funded vaccines"}`
@@ -555,6 +558,8 @@ dat_projection |>
 
 ```
 
+
+
 # `r if(params$lang=="en"){"Country Co-finanacing paid in US$"}`
 # `r if(params$lang=="fr"){"Cofinancement du pays payé (US$)"}`
  
@@ -564,10 +569,10 @@ dat_projection |>
 #| fig.align: "center"
 #| fig.width: 8
 #| warning: false
-# dat_cofi_paid_nonFY <- read_excel("data/infosheet_payment_history_2024-11-30.xlsx", sheet="Non-FY countries")|>  clean_names() 
 
-# prepare temporary dataset by vaccines
-temp <- dat_cofi_paid_nonFY |> 
+
+#### prepare temporary dataset by vaccines ####
+temp <- dat_cofi_paid |> 
   filter(iso3 == params$current_iso3 )|>
   mutate(vaccine_group_sel = case_when( 
     params$lang == "en" ~ vaccine_group_infosheet,
@@ -631,9 +636,11 @@ ggplot(temp) +
 #| fig.width: 7
 #| fig.height: 2
 
-temp <- dat_projection|>
+
+#### prepare data frame for plotting ####
+temp_noIPV <- dat_projection|>
   filter(iso3 == params$current_iso3,
-         vaccine_group!="IPV")|> # to drop the level of IPV
+         vaccine_group!="IPV")|> # to drop the level of IPV due to zero CoFi
   left_join(dat_vaccine_groups|> 
             select(vaccine_group_wbs, vaccine_group_ifs, vaccine_group_gavir, vaccine_group_fr), 
             by =c("vaccine_group"="vaccine_group_ifs"))|>
@@ -645,25 +652,14 @@ temp <- dat_projection|>
          vaccine_group_gavir = factor(vaccine_group_gavir, levels = unique(vaccine_group_gavir)), # Ensure levels for correct color mapping factor
          vaccine_group_sel = factor(vaccine_group_sel, levels = unique(vaccine_group_sel)))
 
-# total_cofi_usd <- temp %>%
-#   group_by(year) %>%
-#   summarise(total = sum(cofi_usd, na.rm = TRUE))
-# 
-# max_total <- max(total_cofi_usd$total, na.rm = TRUE)
-# # Define the y-axis scale based on the condition
-# y_scale <- if (max_total > 1e6) {
-#   scale_y_continuous(labels = scales::label_number(scale = 1e-6, suffix = "")
-#                      #,breaks = seq(0, max(temp$cofi_usd, na.rm = TRUE), by = 5e6)
-#                      )
-# } else {
-#   scale_y_continuous(labels = scales::label_number(scale = 1e-3, suffix = "")
-#                      #,breaks = seq(0, max(temp$cofi_usd, na.rm = TRUE), by = 5e3)
-#                      )
-# }
+#Drop calender years for FY countries!
+if(params$current_iso3 %in% c("PAK","KEN","TAZ","ETH")){
+  temp_noIPV <- temp_noIPV |>
+    filter(nchar(year) > 4)
+}
 
-
-# plotting stacked bar chart 
-ggplot(temp) + 
+#### plotting stacked bar chart ####
+ggplot(temp_noIPV) + 
   geom_bar(aes(fill = vaccine_group_sel,#vaccine_group
                y = cofi_usd,
                x = year),
@@ -674,24 +670,34 @@ ggplot(temp) +
   labs(x = "", 
        y = {if(params$lang=="en") "US$ (Millions)" else "$US (en millions)"},     #need to accommodate thousands
        fill = "")+
-  scale_fill_manual(values = as.vector(gavi_colors(levels(temp$vaccine_group_gavir))))+
+  scale_fill_manual(values = as.vector(gavi_colors(levels(temp_noIPV$vaccine_group_gavir))))+
   scale_y_continuous(labels = scales::label_number(scale = 1e-6, suffix = "")
                      #,breaks = seq(0, max(dat_projection$cofi_usd, na.rm = TRUE), by = 1e6)
                      )
 
-#can't use temp df due to lack of ipv
-dat_projection |>
-  filter(iso3 == params$current_iso3)|>
+#### prepare data frame for table ####  
+temp_withIPV <- dat_projection |> 
+  filter(iso3 == params$current_iso3)|> # keep IPV as 0
   group_by(year, vaccine_group)|>
   summarise(cofi_usd = sum(cofi_usd,na.rm=T), .groups="drop")|>
-  mutate(cofi_usd=format(cofi_usd, big.mark = ","))|>
+  mutate(cofi_usd=format(cofi_usd, big.mark = ","))
+  
+#Drop calender years for FY countries!
+if(params$current_iso3 %in% c("PAK","KEN","TAZ","ETH")){
+  temp_withIPV <- temp_withIPV |>
+    filter(nchar(year) > 4)
+}
+
+#### print table ####
+temp_withIPV |>
   pivot_wider(id_cols = vaccine_group, 
               values_from = cofi_usd, 
               names_from = year)|>
  #Appending Total/Totale 
-   bind_rows( dat_projection |>
-      filter(iso3 == params$current_iso3) |>
+   bind_rows( temp_withIPV |> #! use this df instead of dat_projection
+      # filter(iso3 == params$current_iso3) |>
       group_by(year) |>
+      mutate(cofi_usd = as.numeric(gsub(",", "", cofi_usd)))|> #!! de-format so that it can be summed
       summarise(cofi_usd = sum(cofi_usd, na.rm = TRUE), .groups = "drop") |>
       mutate(vaccine_group = "Total", # "Total" is embedded in dat_vaccine_groups
              cofi_usd = format(cofi_usd, big.mark = ",")) |>
@@ -707,10 +713,12 @@ dat_projection |>
     params$lang == "en" ~ vaccine_group,
     params$lang == "fr" ~ vaccine_group_fr
   )) |>
-  select(vaccine_group_sel, 
-         all_of(as.character(params$current_year : params$projected_year)))|> #`2024`:`2029`
+  select(vaccine_group_sel, everything(),
+         - c(vaccine_group, vaccine_group_fr))|> # old approach was all_of(as.character(params$current_year : max(as.integer(temp$year)))), but this couldn't accomodate FY years
   rename_with(~ if_else(params$lang == "fr" & . == "vaccine_group_sel", 
                         "Cofinancement (US$)", . ))|>
+  rename_with(~ if_else(params$lang == "en" & . == "vaccine_group_sel", 
+                        "Co-financing (US$)", . ))|>
 #tinytable styling:
   tt(theme = "striped", width=1 )|>
   style_tt( 
@@ -753,7 +761,7 @@ vaccines_en_future <- dat_projection |>
   pull(vaccine_group) |>
   unique()
 
-vaccines_fr_future <- temp |> # use temp because fr vaccine names are merged already
+vaccines_fr_future <- temp_noIPV |> # use temp because fr vaccine names are merged already
   filter(iso3 == params$current_iso3) |>
   mutate(current_year = year == params$current_year) |>
   group_by(vaccine_group_fr) |>
@@ -807,8 +815,12 @@ vaccines_fr_future <- temp |> # use temp because fr vaccine names are merged alr
   `r if (params$lang=="fr" & whether_Malaria ) {"
     - Les projections concernant le vaccin contre le paludisme à partir de 2026 ne sont pas estimées en raison de changements programmatiques rapides.
     "}`
-
 ]
+
+
+//vertical spacing as page break
+//#v(300pt)
+
 ```
 
 
@@ -821,6 +833,7 @@ vaccines_fr_future <- temp |> # use temp because fr vaccine names are merged alr
 
 #assessing total are correctly calculated: sum(dat_projection$cofi_usd + dat_projection$gavi_support_usd != dat_projection$total_usd,na.rm=T)
 
+#### prepare data with CoFi-Gavi share ####
 temp <- dat_projection |>
   filter(iso3 == params$current_iso3)|>
   group_by(year,iso3)|> #iso3 only serves as id_cols
@@ -840,8 +853,15 @@ temp <- dat_projection |>
          label_gavi = paste0(gavi_support_usd," (",perc_gavi,"%)"),
          label_total = paste0(total_usd," (",perc_total,"%)")
          )
-  
 
+#Drop calender years for FY countries!
+if(params$current_iso3 %in% c("PAK","KEN","TAZ","ETH")){
+  temp <- temp |>
+    filter(nchar(year) > 4)
+}
+
+
+#### print table####
   temp|>
     pivot_wider(id_cols = iso3, 
                 values_from = c(label_cofi), 
@@ -851,7 +871,8 @@ temp <- dat_projection |>
                       values_from = c(label_gavi), 
                       names_from = year)
     )|>
-    rbind(temp|>
+    #totaling 
+    rbind(temp|> 
           pivot_wider(id_cols = iso3, 
                       values_from = c(label_total), 
                       names_from = year)
@@ -862,12 +883,17 @@ temp <- dat_projection |>
                          params$lang == "en" ~ total_en,
                          params$lang == "fr" ~ total_fr
            ))|>
-    select(Total, 
-         all_of(as.character(params$current_year : params$projected_year)))|> #`2024`:`2029`
+    select(Total, everything(),
+           - c(iso3, total_en, total_fr))|> #old ways was all_of(as.character(params$current_year : max(as.integer(temp$year)))), but his cannot accommodate FY countries
     rename_with(~ if_else(params$lang == "fr" & . == "Total", 
                           "Totale", . ))|>
-#table stlying:    
-  tt(theme = "striped", width= c(1.5,rep(1,6)) )|>
+#table stlying:
+  tt(theme = "striped",
+     width= c(1.5,
+              rep(1,
+                  length(unique(temp$year))) #was width= c(1.5,rep(1,6)), but should be flexible to number of years presented
+             )
+   )|>
   style_tt( 
     i = 0, #header
     color = "white", background = "#005CB9", align = "c")|> 
